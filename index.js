@@ -1,55 +1,30 @@
-const http = require('http');
 const express = require('express');
+const bcrypt = require('bcryptjs');
+const uuidv4 = require('uuid/v4');
 const bodyParser = require('body-parser');
-const morgan = require('morgan');
-const { Ability, AbilityBuilder, ForbiddenError } = require('casl');
 
-const context = require('./data');
-const insertData = require('./data/insert-data');
-const apiRouter = require('./routes');
+const app = express();
+const port = process.env.PORT || 3000;
 
-insertData(context);
+app.use(bodyParser.json());
 
-const app = express(http);
-
-app.use(morgan('dev'));
-
-app.use(bodyParser.json({ type: 'application/json' }));
-
-app.use('/api', (req, res, next) => {
-    const { rules, can, cannot } = AbilityBuilder.extract();
-    const role = req.query.role || 'guest';
-
-    if (role === 'guest') {
-        can('read', 'all');
-    }
-
-    if (role === 'member') {
-        can('read', 'all');
-        can('create', 'Repo');
-        can('update', 'Repo', { author: req.query.author });
-        can(['create', 'update'], 'Commit');
-    }
-
-    if (role === 'moderator') {
-        can('read', 'all');
-        can('update', ['Repo', 'Commit']);
-        can('delete', ['Repo', 'Commit']);
-    }
-
-    req.ability = new Ability(rules);
-
-    next();
+app.get('/hash',(req,res)=>{
+    res.json(getHash());
 });
 
-app.use('/api/', apiRouter);
+function getHash() {
+    let result = uuidv4() ;
+    const salt = bcrypt.genSaltSync(10);
 
-app.use((error, req, res, next) => {
-    if (error instanceof ForbiddenError) {
-        res.status(403).send({ message: error.message })
-    } else {
-        res.send(error);
+    for(let i = 0; i < 10; i++) {
+        result = bcrypt.hashSync(result, salt);
     }
+
+    return result;
+}
+
+app.listen(port, () => {
+    console.log(`Server started at port: ${port}`) ;
 });
 
-app.listen(3000);
+// pm2 start index.js -i max
